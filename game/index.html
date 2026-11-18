@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saltline Relay</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="./style.css">
+<script type="module" src="./play.js"></script>
+</head>
+<body>
+<canvas id="view" aria-label="First person view of Saltline Relay"></canvas>
+<div id="scan"></div>
+<main id="hud" hidden>
+  <header><div><small>SALTLINE / FIELD SIGNAL</small><strong id="objective"></strong></div><div class="telemetry"><small>OPERATION CLOCK</small><strong id="clock"></strong></div></header>
+  <div id="reticle"><i></i><b></b></div>
+  <div id="notice" role="status"></div>
+  <footer>
+    <div><small>VITALS</small><strong id="health"></strong><div class="bar"><i id="vitals"></i></div></div>
+    <div id="nav"><small id="bearing"></small><b id="waypoint"></b></div>
+    <div class="telemetry"><small>CARBINE / AMMO</small><strong id="ammo"></strong></div>
+  </footer>
+</main>
+<div id="impact"></div>
+<section id="overlay">
+  <article id="brief">
+    <div class="stamp"><i></i> FIELD DISPATCH / THE SALTLINE COAST</div>
+    <h1>SALTLINE<br><em>RELAY</em></h1>
+    <p>105 seconds before blackout. Disconnect the core beneath Relay 06, then board the launch at the green dock beacon. Teal seawall markers lead around the service block.</p>
+    <button id="start">Enter the relay <span>↗</span></button>
+    <div class="keys"><kbd>WASD</kbd> Move <kbd>MOUSE</kbd> Aim / Fire <kbd>R</kbd> Reload <kbd>E</kbd> Interact <kbd>ESC</kbd> Pause<br>Amber patrol lamps warn of incoming fire. Strafe or break sight.</div>
+  </article>
+  <article id="report" hidden>
+    <div class="stamp"><i></i> SALTLINE / MISSION REPORT</div>
+    <h2 id="result"></h2>
+    <p id="debrief"></p>
+    <div id="stats"></div>
+    <button id="retry">Deploy again <span>↗</span></button>
+  </article>
+  <article id="pause" hidden>
+    <div class="stamp"><i></i> SALTLINE / FIELD SIGNAL</div>
+    <h2>Holding position</h2>
+    <p>Mission clock paused. Click below to capture the mouse and return to the relay.</p>
+    <button id="resume">Resume mission <span>↗</span></button>
+  </article>
+</section>
+<div id="site">34° 19′ N &nbsp; / &nbsp; BREAKWATER 06</div>
+</body>
+</html>
