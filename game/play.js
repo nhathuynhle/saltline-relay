@@ -4,6 +4,8 @@ import { makeGuard, makeCarbine } from './actors.js';
 import { unlockAudio, sound } from './audio.js';
 import { distance, duration, interaction, spawns, startMission, stepMission } from './mission.js';
 import { createInput } from './input.js';
+import { disposeModel } from './geometry.js';
+import { createCapture, createFixedClock, playerView } from './runtime.js';
 
 const ui = Object.fromEntries([...document.querySelectorAll('[id]')].map(element => [element.id, element]));
 const scene = new T.Scene();
@@ -39,10 +41,16 @@ const { payload, beacon, animateCoast } = buildStation(scene);
 const ray = new T.Raycaster();
 let mission;
 let paused = true;
-let requestingLock = false;
-const input = createInput(window, () => mission?.phase === 'play' && !paused);
-let accumulator = 0;
-let last = performance.now();
+const input = createInput(window, () => mission?.phase === 'play' && capture.captured());
+const clock = createFixedClock();
+const capture = createCapture(ui.view, document, window, input,
+  () => mission?.phase === 'play',
+  active => {
+    paused = !active;
+    clock.reset();
+    if (mission?.phase !== 'play') return;
+    ui.pause.hidden = ui.overlay.hidden = active;
+  });
 
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
@@ -53,33 +61,17 @@ function resize() {
 addEventListener('resize', resize);
 resize();
 
-function captureFailed() {
-  requestingLock = false;
-  if (mission?.phase !== 'play') return;
-  paused = true;
-  ui.pause.hidden = ui.overlay.hidden = false;
-  ui.resume.textContent = 'Click to capture mouse ↗';
-}
-
-async function lock() {
-  if (requestingLock || mission?.phase !== 'play') return;
-  requestingLock = true;
-  try {
-    unlockAudio();
-    await ui.view.requestPointerLock();
-  } catch {
-    captureFailed();
-  } finally {
-    requestingLock = false;
-  }
+function lock() {
+  unlockAudio();
+  capture.request();
 }
 
 function deploy() {
-  if (mission) for (const guard of mission.guards) scene.remove(guard.model);
+  capture.suspend();
+  if (mission) for (const guard of mission.guards) disposeModel(guard.model);
   mission = startMission(spawns.map(([x, z], i) => makeGuard(scene, x, z, i)));
   input.reset();
-  accumulator = 0;
-  last = performance.now();
+  clock.reset();
   payload.visible = true;
   ui.brief.hidden = ui.report.hidden = true;
   ui.hud.hidden = ui.overlay.hidden = false;
@@ -93,30 +85,8 @@ ui.resume.onclick = lock;
 ui.view.onclick = () => {
   if (paused) lock();
 };
-document.addEventListener('pointerlockerror', captureFailed);
-
-document.addEventListener('pointerlockchange', () => {
-  if (mission?.phase !== 'play') return;
-  paused = document.pointerLockElement !== ui.view;
-  input.reset();
-  accumulator = 0;
-  last = performance.now();
-  ui.pause.hidden = ui.overlay.hidden = !paused;
-});
-function suspend() {
-  input.reset();
-  accumulator = 0;
-  if (mission?.phase !== 'play') return;
-  paused = true;
-  ui.pause.hidden = ui.overlay.hidden = false;
-  if (document.pointerLockElement === ui.view) document.exitPointerLock();
-}
-addEventListener('blur', suspend);
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) suspend();
-});
 addEventListener('mousemove', event => {
-  if (mission?.phase !== 'play' || paused) return;
+  if (mission?.phase !== 'play' || !capture.captured()) return;
   const p = mission.player;
   p.yaw -= event.movementX * .0023;
   p.pitch = T.MathUtils.clamp(p.pitch - event.movementY * .0021, -1.12, 1.12);
@@ -124,9 +94,7 @@ addEventListener('mousemove', event => {
 
 function aim(s) {
   const p = s.player;
-  camera.position.set(p.x, 1.58, p.z);
-  camera.rotation.set(p.pitch, p.yaw, 0);
-  camera.updateMatrixWorld();
+  playerView(camera, s);
   ray.setFromCamera(new T.Vector2(), camera);
   const targets = new Map();
   for (const guard of s.guards) {
@@ -164,12 +132,9 @@ function display(s) {
 }
 
 function finish(s) {
-  input.reset();
-  paused = true;
-  accumulator = 0;
+  capture.suspend();
   const won = s.phase === 'won';
   sound(won ? 'won' : 'lost');
-  if (document.pointerLockElement) document.exitPointerLock();
   ui.hud.hidden = true;
   ui.impact.style.opacity = 0;
   ui.pause.hidden = true;
@@ -195,9 +160,7 @@ function render(now) {
   const s = mission;
   const active = s?.phase === 'play';
   if (active) {
-    const p = s.player;
-    camera.position.set(p.x, 1.58 + Math.sin(s.stride) * .018, p.z);
-    camera.rotation.set(p.pitch, p.yaw, 0);
+    playerView(camera, s);
     for (const guard of s.guards) {
       guard.model.visible = guard.hp > 0;
       guard.model.position.set(guard.x, 0, guard.z);
@@ -206,9 +169,9 @@ function render(now) {
       guard.warningLight.visible = guard.hp > 0 && guard.warning > 0;
     }
     carbine.model.position.set(.24 + Math.sin(s.stride / 2) * .012,
-      -.20 + Math.cos(s.stride) * .012 - s.reload * .28, s.fire > .09 ? (s.fire - .09) * .5 : 0);
+      -.20 + Math.cos(s.stride) * .012 - s.reload * .28, s.muzzle * .7);
     carbine.model.rotation.x = s.reload * -.42;
-    carbine.flash.visible = s.fire > .13;
+    carbine.flash.visible = s.muzzle > 0;
     payload.visible = !s.recovered;
     payload.rotation.y = s.elapsed * 1.4;
     beacon.visible = !s.recovered || Math.sin(s.elapsed * 5) > -.4;
@@ -227,16 +190,11 @@ function render(now) {
 }
 
 function frame(now) {
-  const dt = Math.min(.10, (now - last) / 1000);
-  last = now;
-  if (mission?.phase === 'play' && !paused) {
-    accumulator += dt;
-    while (accumulator >= 1 / 60 && mission.phase === 'play') {
-      stepMission(mission, input, 1 / 60, aim, sound);
-      accumulator -= 1 / 60;
-    }
-    if (mission.phase !== 'play') finish(mission);
-  }
+  const wasPlaying = mission?.phase === 'play';
+  clock.advance(now,
+    () => mission?.phase === 'play' && capture.captured(),
+    dt => stepMission(mission, input, dt, aim, sound));
+  if (wasPlaying && mission.phase !== 'play') finish(mission);
   render(now);
   requestAnimationFrame(frame);
 }

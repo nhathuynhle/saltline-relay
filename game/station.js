@@ -134,8 +134,12 @@ export function blocked(x, z, radius = .3) {
 }
 
 export function walk(unit, dx, dz) {
-  if (!blocked(unit.x + dx, unit.z)) unit.x += dx;
-  if (!blocked(unit.x, unit.z + dz)) unit.z += dz;
+  // Subdivide longer callers too, so thin bay walls cannot be crossed in one move.
+  const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dz)) / .15));
+  for (let i = 0; i < steps; i++) {
+    if (!blocked(unit.x + dx / steps, unit.z)) unit.x += dx / steps;
+    if (!blocked(unit.x, unit.z + dz / steps)) unit.z += dz / steps;
+  }
 }
 
 export function clearShot(x, z, tx, tz, height = 1.45) {

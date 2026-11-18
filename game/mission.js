@@ -10,7 +10,7 @@ export function startMission(guards) {
   return {
     player: { x: 0, z: 18, yaw: 0, pitch: 0, hp: 100, ammo: magazineSize, reserve: 72 },
     guards, elapsed: 0, recovered: false, kills: 0, heads: 0, phase: 'play',
-    fire: 0, reload: 0, impact: 0, hit: 0, messageTime: 0, message: '', stride: 0,
+    fire: 0, muzzle: 0, reload: 0, impact: 0, hit: 0, messageTime: 0, message: '', stride: 0,
   };
 }
 
@@ -34,7 +34,7 @@ export function stepMission(s, input, dt, aim, sound) {
     s.phase = 'lost';
     return;
   }
-  for (const key of ['fire', 'impact', 'hit', 'messageTime']) s[key] = Math.max(0, s[key] - dt);
+  for (const key of ['fire', 'muzzle', 'impact', 'hit', 'messageTime']) s[key] = Math.max(0, s[key] - dt);
   if (s.reload) {
     s.reload = Math.max(0, s.reload - dt);
     if (!s.reload) {
@@ -64,6 +64,7 @@ export function stepMission(s, input, dt, aim, sound) {
     input.consume('fire');
     s.fire = .17;
     if (p.ammo) {
+      s.muzzle = .055;
       p.ammo -= 1;
       sound('shot');
       const target = aim(s);

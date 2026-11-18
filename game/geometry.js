@@ -21,3 +21,20 @@ export function lamp(scene, x, y, z, w, h, d, color) {
   object.castShadow = false;
   return object;
 }
+
+export function disposeModel(model) {
+  const geometries = new Set();
+  const ownedMaterials = new Set();
+  const sharedMaterials = new Set(materials.values());
+  model.traverse(object => {
+    if (object.geometry && object.geometry !== cube) geometries.add(object.geometry);
+    const list = Array.isArray(object.material) ? object.material : [object.material];
+    for (const material of list) {
+      if (material && !sharedMaterials.has(material)) ownedMaterials.add(material);
+    }
+  });
+  model.removeFromParent();
+  for (const geometry of geometries) geometry.dispose();
+  for (const material of ownedMaterials) material.dispose();
+  model.clear();
+}
